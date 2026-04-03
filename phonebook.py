@@ -1,79 +1,38 @@
-import psycopg2
-import csv
+# phonebook.py
+from connect import get_connection
 
-conn = psycopg2.connect(
-    host="localhost",
-    database="phonebook_db",
-    user="postgres",
-    password="12341"
-)
-
+conn = get_connection()
 cur = conn.cursor()
 
-# создаем таблицу
-cur.execute("""
-CREATE TABLE IF NOT EXISTS contacts (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(100),
-    phone VARCHAR(20)
-)
-""")
+# 1. Добавляем контакты
+cur.execute("CALL upsert_contact(%s, %s, %s)", ('Ali', 'Khan', '87001234567'))
+cur.execute("CALL upsert_contact(%s, %s, %s)", ('Bob', 'Smith', '87771234567'))
 conn.commit()
 
-print("1. Add contact")
-print("2. Show all")
-print("3. Update")
-print("4. Delete")
-print("5. Import CSV")
+# 2. Вставка массива контактов
+cur.execute(
+    "CALL bulk_insert_contacts(%s, %s, %s)",
+    (['Mike', 'Sara'], ['Tyson', 'Connor'], ['1234567890', 'abc123'])
+)
+conn.commit()
 
-choice = input("Choose: ")
+# 3. Выборка с поиском
+cur.execute("SELECT * FROM search_contacts(%s)", ('Ali',))
+rows = cur.fetchall()
+print("Search result:", rows)
 
-if choice == "1":
-    name = input("Name: ")
-    phone = input("Phone: ")
-    cur.execute(
-        "INSERT INTO contacts (name, phone) VALUES (%s, %s)",
-        (name, phone)
-    )
-    conn.commit()
-    print("Added!")
+# 4. Пагинация
+cur.execute("SELECT * FROM get_contacts_paginated(%s, %s)", (2, 0))
+rows = cur.fetchall()
+print("Paginated:", rows)
 
-elif choice == "2":
-    cur.execute("SELECT * FROM contacts")
-    rows = cur.fetchall()
-    for row in rows:
-        print(row)
+# 5. Удаление
+cur.execute("CALL delete_contact(%s)", ('Mike',))
+conn.commit()
 
-elif choice == "3":
-    name = input("Enter name to update: ")
-    new_phone = input("New phone: ")
-    cur.execute(
-        "UPDATE contacts SET phone=%s WHERE name=%s",
-        (new_phone, name)
-    )
-    conn.commit()
-    print("Updated!")
-
-elif choice == "4":
-    name = input("Enter name to delete: ")
-    cur.execute(
-        "DELETE FROM contacts WHERE name=%s",
-        (name,)
-    )
-    conn.commit()
-    print("Deleted!")
-
-elif choice == "5":
-    with open("contacts.csv", "r", encoding="utf-8") as file:
-        reader = csv.reader(file)
-        next(reader)
-        for row in reader:
-            cur.execute(
-                "INSERT INTO contacts (name, phone) VALUES (%s, %s)",
-                (row[0], row[1])
-            )
-    conn.commit()
-    print("CSV imported!")
+cur.execute("SELECT * FROM contacts")
+rows = cur.fetchall()
+print("Final contacts:", rows)
 
 cur.close()
 conn.close()
